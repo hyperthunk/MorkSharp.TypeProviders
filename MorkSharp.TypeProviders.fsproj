@@ -7,5 +7,8 @@
   <ItemGroup>
     <Compile Include="MorkPropertyProvider.fs" />
   </ItemGroup>
+  <ItemGroup>
+    <PackageReference Include="FSharp.TypeProviders.SDK" Version="8.1.0" />
+  </ItemGroup>
   <Import Project=".paket\Paket.Restore.targets" />
 </Project>

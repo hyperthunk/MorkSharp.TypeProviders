@@ -4,3 +4,4 @@ storage: none
 nuget dotNetRdf.Ontology 3.4.0
 nuget dotNetRdf.Skos 3.4.0
 nuget FSharp.TypeProviders.SDK 8.1.0
+github hyperthunk/mork spec/Mork.ttl

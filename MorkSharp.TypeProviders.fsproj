@@ -6,6 +6,9 @@
     <GenerateDocumentationFile>true</GenerateDocumentationFile>
   </PropertyGroup>
   <ItemGroup>
+    <EmbeddedResource Include="paket-files/hyperthunk/mork/spec/Mork.ttl"  />
+  </ItemGroup>
+  <ItemGroup>
     <PackageReference Include="FSharp.TypeProviders.SDK" Version="8.1.0" />
   </ItemGroup>
   <ItemGroup>

@@ -1,3 +1,11 @@
+#nowarn 59
+(* Sadly in-keeping with Java's approach, the .NET type system is somewhat unsound.
+   Consider, for example: x'.[0] <- upcast [| "test" |] // throws runtime System.ArrayTypeMismatchException
+
+   We do not, however, need to worry about the coersion taking place in properties we are 
+   explicitly binding to a particular type when generating code, viz `this :> MorkPropertyRecord`
+*)
+
 namespace MorkSharp.TypeProviders
 
 open System
@@ -6,6 +14,7 @@ open System.Reflection
 open ProviderImplementation.ProvidedTypes
 open Microsoft.FSharp.Core.CompilerServices
 open VDS.RDF
+open VDS.RDF.Ontology
 open VDS.RDF.Parsing
 
 /// The provided record type for each property
@@ -17,12 +26,6 @@ type public MorkPropertyProvider(cfg: TypeProviderConfig) as this =
     let ns = "MorkSharp.TypeProviders"
     let asm = Assembly.GetExecutingAssembly()
 
-    let makeValidCaseName (s:string) =
-        let s = s.TrimStart(':', '#')
-        let s = s.Replace("-", "_").Replace(".", "_")
-        let s = if System.Char.IsDigit(s.[0]) then "_" + s else s
-        s.Substring(0,1).ToUpper() + s.Substring(1)
-
     /// Try to get the embedded resource stream for Mork.ttl
     let getEmbeddedTtlStream() =
         let resourceName =
@@ -32,14 +35,51 @@ type public MorkPropertyProvider(cfg: TypeProviderConfig) as this =
         | Some name -> asm.GetManifestResourceStream(name)
         | None -> failwith "Embedded Mork.ttl not found in assembly resources. Ensure Mork.ttl is set as an embedded resource."
 
+    let morkBaseURI = "http://www.nebularis.org/ontologies/Mork"
+    let skosBaseURI = "http://www.w3.org/2004/02/skos/core#"
+
+    let mkValidName (s:string) =
+        let s = s.TrimStart(':', '#')
+        let s = s.Replace("-", "_").Replace(".", "_")
+        let s = if System.Char.IsDigit(s.[0]) then "_" + s else s
+        s.Substring(0,1).ToUpper() + s.Substring(1)
+
+    let mkValidCaseName (ss: string array) = 
+        match ss with
+            | [|baseUri; rest|] 
+                when skosBaseURI.StartsWith(baseUri) -> mkValidName ("Skos" + rest)
+            | [|_; rest|] -> mkValidName rest
+            | parts when parts.Length > 1 -> mkValidName parts.[parts.Length-1]
+            | _ -> failwithf "Malformed IRI: %A" ss
+
+    let mapPropertyies (sequence: seq<INode>) = 
+        sequence 
+            |> Seq.choose (function
+                | :? IUriNode as uri
+                    when uri.Uri.AbsoluteUri.StartsWith(morkBaseURI) ||
+                        uri.Uri.AbsoluteUri.StartsWith(skosBaseURI) -> 
+                        Some uri.Uri.AbsoluteUri
+                | _ -> None) 
+            |> Seq.distinct
+            |> Seq.sort
+
     do
         // Parse ontology from embedded resource
-        let g = new Graph()
+        let g = new OntologyGraph()
         use stream = getEmbeddedTtlStream()
         let ttl = new TurtleParser()
         ttl.Load(g, new StreamReader(stream))
 
-        let objectProps =
+        let objectProps = 
+            g.OwlObjectProperties |> Seq.map (fun t -> t.Resource) |> mapPropertyies
+        let objectAndDataProps = 
+            g.OwlDatatypeProperties 
+                |> Seq.map (fun t -> t.Resource) 
+                |> mapPropertyies
+                |> Seq.append objectProps
+                |> Seq.toList
+
+        (* let objectProps =
             g.GetTriplesWithPredicateObject(
                 g.CreateUriNode("rdf:type"),
                 g.CreateUriNode("owl:ObjectProperty"))
@@ -49,18 +89,17 @@ type public MorkPropertyProvider(cfg: TypeProviderConfig) as this =
                 | _ -> None)
             |> Seq.distinct
             |> Seq.sort
-            |> Seq.toList
+            |> Seq.toList *)
 
         // Provided erased record type: MorkProperty
-        let morkPropTy = ProvidedTypeDefinition(asm, ns, "MorkProperty", Some typeof<MorkPropertyRecord>, hideObjectMethods=true)
+        let morkPropTy = 
+            ProvidedTypeDefinition(asm, ns, "MorkProperty", 
+                                   Some typeof<MorkPropertyRecord>, 
+                                   hideObjectMethods=true)
 
                 // Add static properties for each property, returning the erased record
-        for iri in objectProps do
-            let label =
-                match iri.Split([|'#'|], StringSplitOptions.RemoveEmptyEntries) with
-                | [| |] -> failwithf "Malformed IRI: %s" iri
-                | parts -> makeValidCaseName parts.[parts.Length-1]
-
+        for iri in objectAndDataProps do
+            let label = mkValidCaseName <| iri.Split([|'#'|], StringSplitOptions.RemoveEmptyEntries)
             let prop = 
                 ProvidedProperty(
                     label,
@@ -72,13 +111,25 @@ type public MorkPropertyProvider(cfg: TypeProviderConfig) as this =
             prop.AddXmlDoc(sprintf "IRI: %s" iri)
             morkPropTy.AddMember(prop)
 
-        // Add instance properties: Name, Iri
-        let nameProp = ProvidedProperty("Name", typeof<string>, getterCode = (fun [this] -> <@@ (%%this : MorkPropertyRecord).Name @@>))
-        let iriProp = ProvidedProperty("Iri", typeof<string>, getterCode = (fun [this] -> <@@ (%%this : MorkPropertyRecord).Iri @@>))
-        morkPropTy.AddMember(nameProp)
-        morkPropTy.AddMember(iriProp)
+        (* 
+            Frustratingly, adding no-warn here for the match expression in the lambda for the 
+            getterCode will disable incomplete match warnings for the the whole file! :/ 
+        *)
+        let nameProp = 
+            ProvidedProperty("Name", 
+                            typeof<string>, 
+                            getterCode = (fun [this] -> 
+                                <@@ (%%this : MorkPropertyRecord).Name @@>))
+        let iriProp = 
+            ProvidedProperty("Iri", 
+            typeof<string>, getterCode = (fun [this] -> 
+                                <@@ (%%this : MorkPropertyRecord).Iri @@>))
+        
+        morkPropTy.AddMember nameProp
+        morkPropTy.AddMember iriProp
 
-        // Add a constructor for custom property (for unknown/custom IRIs)
+        // TODO: consider whether we _really_ need this?
+        // generate { member this.CreateCustom (iri: string): MorkPropertyRecord }
         let ctor = ProvidedMethod(
             methodName = "CreateCustom",
             parameters = [ ProvidedParameter("iri", typeof<string>) ],
@@ -90,24 +141,30 @@ type public MorkPropertyProvider(cfg: TypeProviderConfig) as this =
         )
         ctor.AddXmlDoc("Create a MorkProperty for an arbitrary IRI.")
         morkPropTy.AddMember(ctor)
-
-        // Add instance properties: Name, Iri
-        let nameProp = ProvidedProperty("Name", typeof<string>, getterCode = (fun [this] -> <@@ (%%this :> MorkPropertyRecord).Name @@>))
-        let iriProp = ProvidedProperty("Iri", typeof<string>, getterCode = (fun [this] -> <@@ (%%this :> MorkPropertyRecord).Iri @@>))
+        
+        let nameProp = 
+            ProvidedProperty("Name", 
+                            typeof<string>, 
+                            getterCode = (fun [this] -> <@@ (%%this :> MorkPropertyRecord).Name @@>))
+        let iriProp = 
+            ProvidedProperty("Iri", 
+                            typeof<string>, 
+                            getterCode = (fun [this] -> <@@ (%%this :> MorkPropertyRecord).Iri @@>))
         morkPropTy.AddMember(nameProp)
         morkPropTy.AddMember(iriProp)
 
-        // Add static property All for enumeration
+        // generate {member this.AllProperties: seq<MorkPropertyRecord>}
         let allPropsExpr =
             let vals = 
                 objectProps
-                |> List.map (fun iri ->
-                    let label = iri.Split([|'#'|], StringSplitOptions.RemoveEmptyEntries) |> Array.last |> makeValidCaseName
-                    { Name = label; Iri = iri })
-                |> List.toArray
+                |> Seq.map (fun iri ->
+                    let label = mkValidCaseName <| iri.Split([|'#'|], StringSplitOptions.RemoveEmptyEntries)
+                    in { Name = label; Iri = iri }
+                )
             <@@ vals @@>
-        let allProp = ProvidedProperty("All", typeof<MorkPropertyRecord[]>, isStatic = true, getterCode = (fun _ -> allPropsExpr))
-        allProp.AddXmlDoc("All object properties from the Mork ontology.")
+        
+        let allProp = ProvidedProperty("AllProperties", typeof<seq<MorkPropertyRecord>>, isStatic = true, getterCode = (fun _ -> allPropsExpr))
+        allProp.AddXmlDoc("Complete set of properties from the Mork and Skos ontologies.")
         morkPropTy.AddMember(allProp)
 
         // Add to namespace

@@ -79,18 +79,6 @@ type public MorkPropertyProvider(cfg: TypeProviderConfig) as this =
                 |> Seq.append objectProps
                 |> Seq.toList
 
-        (* let objectProps =
-            g.GetTriplesWithPredicateObject(
-                g.CreateUriNode("rdf:type"),
-                g.CreateUriNode("owl:ObjectProperty"))
-            |> Seq.map (fun t -> t.Subject)
-            |> Seq.choose (function
-                | :? IUriNode as uri -> Some uri.Uri.AbsoluteUri
-                | _ -> None)
-            |> Seq.distinct
-            |> Seq.sort
-            |> Seq.toList *)
-
         // Provided erased record type: MorkProperty
         let morkPropTy = 
             ProvidedTypeDefinition(asm, ns, "MorkProperty", 
@@ -142,17 +130,6 @@ type public MorkPropertyProvider(cfg: TypeProviderConfig) as this =
         ctor.AddXmlDoc("Create a MorkProperty for an arbitrary IRI.")
         morkPropTy.AddMember(ctor)
         
-        let nameProp = 
-            ProvidedProperty("Name", 
-                            typeof<string>, 
-                            getterCode = (fun [this] -> <@@ (%%this :> MorkPropertyRecord).Name @@>))
-        let iriProp = 
-            ProvidedProperty("Iri", 
-                            typeof<string>, 
-                            getterCode = (fun [this] -> <@@ (%%this :> MorkPropertyRecord).Iri @@>))
-        morkPropTy.AddMember(nameProp)
-        morkPropTy.AddMember(iriProp)
-
         // generate {member this.AllProperties: seq<MorkPropertyRecord>}
         let allPropsExpr =
             let vals = 

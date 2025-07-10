@@ -12,7 +12,7 @@ open VDS.RDF.Parsing
 type MorkPropertyRecord = { Name: string; Iri: string }
 
 [<TypeProvider>]
-type MorkPropertyProvider(cfg: TypeProviderConfig) as this =
+type public MorkPropertyProvider(cfg: TypeProviderConfig) as this =
     inherit TypeProviderForNamespaces(cfg)
     let ns = "MorkSharp.TypeProviders"
     let asm = Assembly.GetExecutingAssembly()

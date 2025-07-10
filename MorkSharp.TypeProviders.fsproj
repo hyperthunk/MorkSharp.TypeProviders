@@ -2,8 +2,12 @@
 <Project Sdk="Microsoft.NET.Sdk">
   <PropertyGroup>
     <TargetFramework>net9.0</TargetFramework>
+    <CopyLocalLockFileAssemblies>true</CopyLocalLockFileAssemblies>
     <GenerateDocumentationFile>true</GenerateDocumentationFile>
   </PropertyGroup>
+  <ItemGroup>
+    <PackageReference Include="FSharp.TypeProviders.SDK" Version="8.1.0" />
+  </ItemGroup>
   <ItemGroup>
     <Compile Include="MorkPropertyProvider.fs" />
   </ItemGroup>

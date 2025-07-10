@@ -6,6 +6,9 @@
     <GenerateDocumentationFile>true</GenerateDocumentationFile>
   </PropertyGroup>
   <ItemGroup>
+    <PackageReference Include="FSharp.TypeProviders.SDK" Version="8.1.0" />
+  </ItemGroup>
+  <ItemGroup>
     <Compile Include="MorkPropertyProvider.fs" />
   </ItemGroup>
   <Import Project=".paket\Paket.Restore.targets" />

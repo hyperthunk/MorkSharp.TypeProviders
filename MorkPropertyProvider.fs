@@ -80,9 +80,10 @@ type public MorkPropertyProvider(cfg: TypeProviderConfig) as this =
 
         // Provided erased record type: MorkProperty
         let morkPropTy = 
-            ProvidedTypeDefinition(asm, ns, "MorkProperty", 
-                                   Some typeof<MorkPropertyRecord>, 
-                                   hideObjectMethods=true)
+            ProvidedTypeDefinition(asm, ns, "MorkProperties", 
+                                   Some typeof<obj>, 
+                                   hideObjectMethods=false,
+                                   isErased=false)
 
                 // Add static properties for each property, returning the erased record
         let typeDefs: list<ProvidedTypeDefinition> = 
@@ -113,30 +114,18 @@ type public MorkPropertyProvider(cfg: TypeProviderConfig) as this =
                     let nameProp = 
                         ProvidedProperty("Name", 
                                         typeof<string>, 
+                                        isStatic=false,
                                         getterCode = (fun [this] -> <@@ label @@>))
                     let iriProp = 
                         ProvidedProperty("Iri", 
-                                        typeof<string>, 
+                                        typeof<string>,
+                                        isStatic=false, 
                                         getterCode = (fun [this] -> <@@ iri @@>))
                     
                     morkInstanceTy.AddMember nameProp
                     morkInstanceTy.AddMember iriProp
                     morkInstanceTy
                 ) |> Seq.toList
-
-        // TODO: consider whether we _really_ need this?
-        // generate { member this.CreateCustom (iri: string): MorkPropertyRecord }
-        let ctor = ProvidedMethod(
-            methodName = "CreateCustom",
-            parameters = [ ProvidedParameter("iri", typeof<string>) ],
-            returnType = morkPropTy,
-            isStatic = true,
-            invokeCode = (fun [iriExpr] ->
-                <@@ { Name = "CustomProperty"; Iri = %%iriExpr } @@>
-            )
-        )
-        ctor.AddXmlDoc("Create a MorkProperty for an arbitrary IRI.")
-        morkPropTy.AddMember(ctor)
         
         // generate {member this.AllProperties: seq<MorkPropertyRecord>}
         let allPropsExpr =
@@ -145,10 +134,10 @@ type public MorkPropertyProvider(cfg: TypeProviderConfig) as this =
                 |> Seq.map (fun iri ->
                     let label = mkValidCaseName <| iri.Split([|'#'|], StringSplitOptions.RemoveEmptyEntries)
                     in { Name = label; Iri = iri }
-                )
+                ) |> Seq.toArray
             <@@ vals @@>
         
-        let allProp = ProvidedProperty("AllProperties", typeof<seq<MorkPropertyRecord>>, isStatic = true, getterCode = (fun _ -> allPropsExpr))
+        let allProp = ProvidedProperty("AllProperties", typeof<array<MorkPropertyRecord>>, isStatic = true, getterCode = (fun _ -> allPropsExpr))
         allProp.AddXmlDoc("Complete set of properties from the Mork and Skos ontologies.")
         morkPropTy.AddMember(allProp)
 

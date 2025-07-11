@@ -23,7 +23,7 @@ type MorkPropertyRecord = { Name: string; Iri: string }
 [<TypeProvider>]
 type public MorkPropertyProvider(cfg: TypeProviderConfig) as this =
     inherit TypeProviderForNamespaces(cfg)
-    let ns = "MorkSharp.TypeProviders"
+    let ns = "MorkSharp"
     let asm = Assembly.GetExecutingAssembly()
 
     /// Try to get the embedded resource stream for Mork.ttl
@@ -82,7 +82,8 @@ type public MorkPropertyProvider(cfg: TypeProviderConfig) as this =
         let morkPropTy = 
             ProvidedTypeDefinition(asm, ns, "MorkProperties", 
                                    Some typeof<obj>, 
-                                   isErased=true)
+                                   hideObjectMethods=false,
+                                   isErased=false)
 
                 // Add static properties for each property, returning the erased record
         let propNames: array<string> = 

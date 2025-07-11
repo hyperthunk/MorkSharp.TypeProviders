@@ -82,8 +82,7 @@ type public MorkPropertyProvider(cfg: TypeProviderConfig) as this =
         let morkPropTy = 
             ProvidedTypeDefinition(asm, ns, "MorkProperties", 
                                    Some typeof<obj>, 
-                                   hideObjectMethods=false,
-                                   isErased=false)
+                                   isErased=true)
 
                 // Add static properties for each property, returning the erased record
         let propNames: array<string> = 

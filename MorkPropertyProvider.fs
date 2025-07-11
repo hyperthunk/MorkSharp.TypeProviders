@@ -90,21 +90,22 @@ type public MorkPropertyProvider(cfg: TypeProviderConfig) as this =
                 |> Seq.map (fun iri ->
                     // static accessor for the generated type
                     let label = mkValidCaseName <| iri.Split([|'#'|], StringSplitOptions.RemoveEmptyEntries)
-                    let prop = 
-                        ProvidedProperty(
-                            label,
-                            morkPropTy,
-                            isStatic = true,
-                            getterCode = (fun _ -> 
-                                let recVal = { Name = label; Iri = iri }
-                                <@@ recVal @@>))
-                    prop.AddXmlDoc(sprintf "IRI: %s" iri)
-                    morkPropTy.AddMember(prop)
-
                     let morkInstanceTy = 
                         ProvidedTypeDefinition(asm, ns, $"Mork{label}Prop", 
                                             Some typeof<MorkPropertyRecord>, 
                                             hideObjectMethods=true)
+                    let prop = 
+                        ProvidedProperty(
+                            label,
+                            morkInstanceTy,
+                            isStatic = true,
+                            getterCode = (fun _ -> 
+                                let name = label
+                                let fqName = iri
+                                <@@ { Name = name; Iri = fqName } @@>))
+                    prop.AddXmlDoc(sprintf "IRI: %s" iri)
+                    morkPropTy.AddMember(prop)
+
                     (* 
                         Frustratingly, adding no-warn here for the match expression in the lambda for the 
                         getterCode will disable incomplete match warnings for the the whole file! :/ 
@@ -152,7 +153,7 @@ type public MorkPropertyProvider(cfg: TypeProviderConfig) as this =
         morkPropTy.AddMember(allProp)
 
         // Add to namespace
-        this.AddNamespace(ns, morkPropTy :: typeDefs)
+        this.AddNamespace(ns, List.rev (morkPropTy :: typeDefs))
 
 [<assembly:TypeProviderAssembly>]
 do ()

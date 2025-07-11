@@ -106,7 +106,7 @@ type public MorkPropertyProvider(cfg: TypeProviderConfig) as this =
                 ) |> Seq.toArray
         
         let allPropNamesExpr = <@@ propNames @@>
-        let allPropNames = ProvidedProperty("AllProperties", 
+        let allPropNames = ProvidedProperty("GetPropertyNames", 
                                             typeof<array<string>>, 
                                             isStatic = true, 
                                             getterCode = (fun _ -> allPropNamesExpr))
@@ -122,7 +122,7 @@ type public MorkPropertyProvider(cfg: TypeProviderConfig) as this =
                 ) |> Seq.toArray
             <@@ vals @@>
         
-        let allProp = ProvidedProperty("AllProperties", 
+        let allProp = ProvidedProperty("GetProperties", 
                                     typeof<array<MorkPropertyRecord>>, 
                                     isStatic = true, 
                                     getterCode = (fun _ -> allPropsExpr))

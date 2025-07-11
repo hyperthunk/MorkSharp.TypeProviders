@@ -86,19 +86,15 @@ type public MorkPropertyProvider(cfg: TypeProviderConfig) as this =
                                    isErased=false)
 
                 // Add static properties for each property, returning the erased record
-        let typeDefs: list<ProvidedTypeDefinition> = 
+        let propNames: array<string> = 
             objectAndDataProps 
                 |> Seq.map (fun iri ->
                     // static accessor for the generated type
                     let label = mkValidCaseName <| iri.Split([|'#'|], StringSplitOptions.RemoveEmptyEntries)
-                    let morkInstanceTy = 
-                        ProvidedTypeDefinition(asm, ns, $"Mork{label}Prop", 
-                                            Some typeof<MorkPropertyRecord>, 
-                                            hideObjectMethods=true)
                     let prop = 
                         ProvidedProperty(
                             label,
-                            morkInstanceTy,
+                            typeof<MorkPropertyRecord>,
                             isStatic = true,
                             getterCode = (fun _ -> 
                                 let name = label
@@ -106,28 +102,17 @@ type public MorkPropertyProvider(cfg: TypeProviderConfig) as this =
                                 <@@ { Name = name; Iri = fqName } @@>))
                     prop.AddXmlDoc(sprintf "IRI: %s" iri)
                     morkPropTy.AddMember(prop)
-
-                    (* 
-                        Frustratingly, adding no-warn here for the match expression in the lambda for the 
-                        getterCode will disable incomplete match warnings for the the whole file! :/ 
-                    *)
-                    let nameProp = 
-                        ProvidedProperty("Name", 
-                                        typeof<string>, 
-                                        isStatic=false,
-                                        getterCode = (fun [this] -> <@@ label @@>))
-                    let iriProp = 
-                        ProvidedProperty("Iri", 
-                                        typeof<string>,
-                                        isStatic=false, 
-                                        getterCode = (fun [this] -> <@@ iri @@>))
-                    
-                    morkInstanceTy.AddMember nameProp
-                    morkInstanceTy.AddMember iriProp
-                    morkInstanceTy
-                ) |> Seq.toList
+                    iri
+                ) |> Seq.toArray
         
-        // generate {member this.AllProperties: seq<MorkPropertyRecord>}
+        let allPropNamesExpr = <@@ propNames @@>
+        let allPropNames = ProvidedProperty("AllProperties", 
+                                            typeof<array<string>>, 
+                                            isStatic = true, 
+                                            getterCode = (fun _ -> allPropNamesExpr))
+        allPropNames.AddXmlDoc("Complete set of property names from the Mork and Skos ontologies.")
+        morkPropTy.AddMember(allPropNames)
+
         let allPropsExpr =
             let vals = 
                 objectProps
@@ -137,12 +122,15 @@ type public MorkPropertyProvider(cfg: TypeProviderConfig) as this =
                 ) |> Seq.toArray
             <@@ vals @@>
         
-        let allProp = ProvidedProperty("AllProperties", typeof<array<MorkPropertyRecord>>, isStatic = true, getterCode = (fun _ -> allPropsExpr))
+        let allProp = ProvidedProperty("AllProperties", 
+                                    typeof<array<MorkPropertyRecord>>, 
+                                    isStatic = true, 
+                                    getterCode = (fun _ -> allPropsExpr))
         allProp.AddXmlDoc("Complete set of properties from the Mork and Skos ontologies.")
         morkPropTy.AddMember(allProp)
 
         // Add to namespace
-        this.AddNamespace(ns, List.rev (morkPropTy :: typeDefs))
+        this.AddNamespace(ns, [morkPropTy])
 
 [<assembly:TypeProviderAssembly>]
 do ()
